@@ -15,6 +15,7 @@ import numpy as np
 import soundfile as sf
 import yaml
 import pretty_midi
+import mido
 import pyloudnorm as pyln
 
 import utils
@@ -326,7 +327,7 @@ def render_sources(src_by_inst, sr, buf, kontakt_path, def_dir, dest_dir, sleep=
                 metadata_path = render_info_dict['metadata']
                 source_key = render_info_dict['source_key']
                 end_time = render_info_dict['end_time']
-                metadata = yaml.load(open(metadata_path, 'r'))
+                metadata = yaml.load(open(metadata_path, 'r'), Loader=yaml.Loader)
 
                 audio_out_path = os.path.join(metadata['audio_dir'], '{}.wav'.format(source_key))
 
@@ -349,24 +350,24 @@ def render_sources(src_by_inst, sr, buf, kontakt_path, def_dir, dest_dir, sleep=
                     else:
                         eng = utils.load_engine(sr, buf, inst, verbose=False)
 
-                    logger.info('~~({}/{})~~ Loaded RenderMan engine {}'.format(inst_cnt,
+                    logger.info('~~({}/{})~~ Loaded Pedalboard engine {}'.format(inst_cnt,
                                                                                 len(src_by_inst),
                                                                                 inst))
 
                 midi_file_path = os.path.abspath(os.path.join(metadata['midi_dir'],
                                                               '{}.mid'.format(source_key)))
 
-                metadata['stems'][source_key]['plugin_preset_name'] = eng.get_program_name()
+                metadata['stems'][source_key]['plugin_preset_name'] = inst
 
                 # Set and save params here
                 # _, metadata[source_key]['parameters'] = utils.set_parameters(eng)
 
-                eng.load_midi(str(midi_file_path))
-                eng.render_midi(end_time)
+                midi_messages = mido.MidiFile(midi_file_path)
+                messages = [message for message in midi_messages]
+                logger.info('Rendering MIDI file...')
+                audio = eng.process(messages, duration=2, sample_rate=sr)
                 logger.info('Rendered MIDI file...')
 
-                # Do some crude normalization before we write to disk
-                audio = np.array(eng.get_audio_frames())
                 if np.max(np.abs(audio)) == 0.0:
                     continue
 
