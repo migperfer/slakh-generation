@@ -362,10 +362,28 @@ def render_sources(src_by_inst, sr, buf, kontakt_path, def_dir, dest_dir, sleep=
                 # Set and save params here
                 # _, metadata[source_key]['parameters'] = utils.set_parameters(eng)
 
-                midi_messages = mido.MidiFile(midi_file_path)
-                messages = [message for message in midi_messages]
+                pretty_midi_object = pretty_midi.PrettyMIDI(midi_file_path)
+                midi_messages = []
+                last_note_end = 0.0
+                if len(pretty_midi_object.instruments) > 1:
+                    raise RuntimeError('MIDI file has more than one instrument!')
+                for note in pretty_midi_object.instruments[0].notes:
+                    note_on_message = mido.Message('note_on', note=note.pitch,
+                                                   velocity=note.velocity,
+                                                   time=note.start)
+                    note_off_message = mido.Message('note_off', note=note.pitch,
+                                                    velocity=0,
+                                                    time=note.end)
+
+                    midi_messages.append(note_on_message)
+                    midi_messages.append(note_off_message)
+
+                    if note.end > last_note_end:
+                        last_note_end = note.end
+
+                midi_messages.sort(key=lambda x: x.time)
                 logger.info('Rendering MIDI file...')
-                audio = eng.process(messages, duration=2, sample_rate=sr)
+                audio = eng.process(midi_messages, duration=last_note_end, sample_rate=sr).T
                 logger.info('Rendered MIDI file...')
 
                 if np.max(np.abs(audio)) == 0.0:
@@ -375,7 +393,7 @@ def render_sources(src_by_inst, sr, buf, kontakt_path, def_dir, dest_dir, sleep=
                 audio *= 0.8
 
                 if not np.isclose(float(len(audio)) / float(sr), end_time, atol=0.1):
-                    raise RuntimeError(
+                    logger.warning(
                         'Length of rendered audio ({}) does not match end_time ({})'
                         .format(float(len(audio)) / float(sr), end_time)
                     )
@@ -427,7 +445,7 @@ def normalize_and_mix(output_dirs, sr, normalization_factor, target_peak, remix_
 
             metadata_path = os.path.join(os.path.dirname(cur_dir), 'metadata.yaml')
             if os.path.isfile(metadata_path):
-                metadata = yaml.load(open(metadata_path))
+                metadata = yaml.load(open(metadata_path), yaml.Loader)
             else:
                 metadata = {}
             metadata['normalized'] = False
@@ -450,7 +468,7 @@ def normalize_and_mix(output_dirs, sr, normalization_factor, target_peak, remix_
 
             normalized_audio = {p: pyln.normalize.loudness(a, loudnesses[j], normalization_factor)
                                 for j, (p, a) in enumerate(all_audio.items())}
-            mixture = np.sum(normalized_audio.values(), axis=0)
+            mixture = np.sum(list(normalized_audio.values()), axis=0)
 
             peak = np.max(np.abs(mixture))
             if peak >= target_gain:

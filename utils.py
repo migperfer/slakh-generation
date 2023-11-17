@@ -4,10 +4,7 @@ import shutil
 import numpy as np
 import time
 import errno
-
-sys.path.append(os.path.join('RenderMan-master', 'Builds', 'MacOSX', 'build', 'Debug'))
-
-import librenderman as rm
+import pedalboard
 
 
 def copy_and_rename_def(src_dir, src_file, dest_dir):
@@ -117,8 +114,7 @@ def load_engine(sr, buf, plugin_path, sleep=7.0, verbose=True):
     :param verbose:
     :return:
     """
-    eng = rm.RenderEngine(sr, buf)
-    assert eng.load_plugin(str(plugin_path))
+    eng = pedalboard.load_plugin(plugin_path)
 
     # Set parameters like so:
     # eng.set_parameter(90, 0.5)
@@ -140,8 +136,7 @@ def load_engine_konkakt(sr, buf, plugin_path, def_dir, def_name, dest_dir, sleep
     :return: RenderMan engine that has Konkakt plugin loaded with state provided by def_name
     """
     copy_and_rename_def(def_dir, def_name, dest_dir)
-    eng = rm.RenderEngine(sr, buf)
-    assert eng.load_plugin(plugin_path)
+    eng = pedalboard.load_plugin(plugin_path, plugin_name='Kontakt7')
     if verbose:
         print('Loaded {}'.format(def_name))
     time.sleep(sleep)
